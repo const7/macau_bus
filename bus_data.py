@@ -3,7 +3,7 @@ Description: Collect bus data from Macau DSAT
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:07:46
-LastEditTime: 2023-10-05 22:08:12
+LastEditTime: 2023-10-06 15:45:43
 """
 
 import time
@@ -15,6 +15,8 @@ from datetime import datetime
 
 import config
 
+# load config
+config = config.Config()
 # set logging config
 logging.basicConfig(
     filename=config.LOG_PAHT,
@@ -210,7 +212,7 @@ def main():
         while True:
             for route in config.ROUTES:
                 try:
-                    response = get_api_response(config)
+                    response = get_api_response(route)
                     process_response(conn, route, response.json())
                 except requests.RequestException as e:
                     logging.error(f"Failed to fetch API data for route {route}: {e}")

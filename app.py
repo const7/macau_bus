@@ -3,44 +3,32 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-10-05 22:13:38
+LastEditTime: 2023-10-06 16:21:28
 """
 
 import sqlite3
 import pandas as pd
 
-import streamlit as st
+# plot
 import seaborn as sns
 import plotly.express as px
 from matplotlib import pyplot as plt
 from matplotlib import font_manager
 
+# web app
+import streamlit as st
+import streamlit.components.v1 as components
+
+# laod config
 import config
+from src import utils
 
-# font_manager.fontManager.addfont("./data/Helvetica.ttf")
-# plt.rcParams["font.family"] = "Helvetica"
-st.set_option("deprecation.showPyplotGlobalUse", False)
-
-
+config = config.Config()
 # load station name dict
-station2name = pd.read_csv(config.STATION_NAME_PATH, index_col=0)[
-    "station_name"
-].to_dict()
-# Database connection
-conn = sqlite3.connect(config.DATABASE_PATH)
+sid2name = pd.read_csv(config.STATION_NAME_PATH, index_col=0)["station_name"].to_dict()
 
 
-# construct station name
-def construct_station_name(station_code, station_index):
-    # add "/1" to station code if not exist
-    station_tmp_code = station_code if "/" in station_code else station_code + "/1"
-    station_tmp_name = station2name.get(station_tmp_code, "未知站点")
-    if station_index == 0:
-        station_tmp_name += " (起点)"
-    return f"[{station_index}] {station_code}-{station_tmp_name}"
-
-
-def load_data(route):
+def load_data(conn, route):
     query = f"""
     SELECT DISTINCT station_code, station_index
     FROM bus_data
@@ -49,7 +37,9 @@ def load_data(route):
     """
     data = pd.read_sql(query, conn)
     data["station_name"] = data[["station_code", "station_index"]].apply(
-        lambda row: construct_station_name(row["station_code"], row["station_index"]),
+        lambda row: utils.get_station_name(
+            sid2name, row["station_code"], row["station_index"]
+        ),
         axis=1,
     )
     station_options = [
@@ -61,7 +51,7 @@ def load_data(route):
     return station_options
 
 
-def load_arrival_data(route, station_info):
+def load_arrival_data(conn, route, station_info):
     station_code, station_index = station_info
     query = f"""
     SELECT arrival_time
@@ -69,7 +59,6 @@ def load_arrival_data(route, station_info):
     WHERE route = '{route}' AND station_code = '{station_code}' AND station_index = {station_index}
     """
     data = pd.read_sql(query, conn)
-    print(data.head())
     data["minute"] = pd.to_datetime(data["arrival_time"]).dt.strftime("%H:%M")
 
     # Create a DataFrame with every minute of the day
@@ -87,8 +76,8 @@ def load_arrival_data(route, station_info):
     return merged_data
 
 
-def plot_data(selected_route, selected_station_info):
-    data = load_arrival_data(selected_route, selected_station_info)
+def plot_data(conn, selected_route, selected_station_info):
+    data = load_arrival_data(conn, selected_route, selected_station_info)
     fig = px.line(data, x="minute", y="count")
     fig.update_traces(line=dict(color="green", width=1))
     fig.update_layout(
@@ -102,12 +91,14 @@ def plot_data(selected_route, selected_station_info):
     st.plotly_chart(fig)
 
 
-def plot_travel_time(route):
+def plot_travel_time(conn, route):
     query = f"SELECT * FROM bus_data WHERE route = '{route}' ORDER BY bus_plate, arrival_time, station_index"
     data = pd.read_sql(query, conn)
     data["arrival_datetime"] = pd.to_datetime(data["arrival_time"])
     data["station_name"] = data[["station_code", "station_index"]].apply(
-        lambda row: construct_station_name(row["station_code"], row["station_index"]),
+        lambda row: utils.get_station_name(
+            sid2name, row["station_code"], row["station_index"]
+        ),
         axis=1,
     )
     station_id2name = (
@@ -179,30 +170,66 @@ def plot_travel_time(route):
     return plt.gcf()  # return the current figure
 
 
-def main():
-    st.title("Bus Arrival Time Distribution")
+def get_recent_start(conn, route):
+    query = f"SELECT * FROM bus_data WHERE route = '{route}' AND station_index = 0 ORDER BY arrival_time DESC LIMIT 3"
+    data = pd.read_sql(query, conn)
+    return data
 
+
+def build_sidebar(conn):
     # Load unique routes from the database
     routes = pd.read_sql("SELECT DISTINCT route FROM bus_data", conn)
 
     # User input in the sidebar
     with st.sidebar:
-        st.header("Settings")
+        st.header("设置")
         selected_route = st.selectbox("Select a route", routes["route"])
         # Load stations based on selected route
-        station_options = load_data(selected_route)
+        station_options = load_data(conn, selected_route)
         _, selected_station_info = st.selectbox(
             "Select a station", options=station_options, format_func=lambda x: x[0]
         )
+    return selected_route, selected_station_info
 
-    # Plot data for Arrival Time Distribution on the main page
-    st.subheader("Arrival Time Distribution")
-    plot_data(selected_route, selected_station_info)
 
-    # Plot data for Average Travel Time Between Stations on the main page
-    st.subheader("当前站到下一站的平均时间")
-    fig = plot_travel_time(selected_route)
-    st.pyplot(fig)  # Render the travel time plot in Streamlit
+def main():
+    st.title("澳门巴士数据")
+
+    with sqlite3.connect(config.DATABASE_PATH) as conn:
+        selected_route, selected_station_info = build_sidebar(conn)
+
+        st.write("最近三趟发车时间")
+        st.dataframe(get_recent_start(conn, selected_route), hide_index=True)
+
+        with st.expander("查看实时路线及位置"):
+            iframe_height = 500
+            route_line_col, route_map_col = st.columns([3, 2])
+            with route_line_col:
+                components.iframe(
+                    f"https://bis.dsat.gov.mo:37812/macauweb/map.html?routeName={selected_route}&routeCode={selected_route.zfill(5)}",
+                    height=iframe_height,
+                )
+            with route_map_col:
+                components.iframe(
+                    f"https://bis.dsat.gov.mo:37812/macauweb/routeLine.html?routeName={selected_route}",
+                    height=iframe_height,
+                )
+        import numpy as np
+
+        # map_data = pd.DataFrame(
+        #     np.random.randn(1000, 2) / [50, 50] + [37.76, -122.4], columns=["lat", "lon"]
+        # )
+
+        # st.map(map_data)
+
+        # # Plot data for Arrival Time Distribution on the main page
+        # st.subheader("Arrival Time Distribution")
+        # plot_data(selected_route, selected_station_info)
+
+        # Plot data for Average Travel Time Between Stations on the main page
+        st.subheader("当前站到下一站的平均时间")
+        fig = plot_travel_time(conn, selected_route)
+        st.pyplot(fig)  # Render the travel time plot in Streamlit
 
 
 if __name__ == "__main__":
