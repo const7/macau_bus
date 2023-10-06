@@ -1,28 +1,14 @@
 import pandas as pd
+from pathlib import Path
+
+# station id to name csv from preprocessed public data
+STATION_NAME_PATH = Path(__file__).resolve().parent.parent / "data" / "station2name.csv"
 
 
-def get_station_name(sid2name, station_code, station_index):
-    """Construct station name.
-    Parameters
-    ----------
-    sid2name : dict
-        Station id to station name dict
-    station_code : str
-        Station code like T530
-    station_index : int
-        Station index in the route
-
-    Returns
-    -------
-    station_name : str
-        Station name
-    """
-    # add "/1" to station code if not exist
-    station_tmp_code = station_code if "/" in station_code else station_code + "/1"
-    station_name = sid2name.get(station_tmp_code, "未知站点")
-    if station_index == 0:
-        station_name += " (起点)"
-    return station_name
+# @st.cache_resource
+def load_scode2name(file_path):
+    print("testset")
+    return pd.read_csv(file_path, index_col=0)["station_name"].to_dict()
 
 
 def save_stationid2name_file(shp_path, outfile_path):
