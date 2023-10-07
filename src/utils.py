@@ -1,3 +1,11 @@
+"""
+Description: Utils functions for the project
+Author: Chen Kun
+Email: chenkun_@outlook.com
+Date: 2023-10-06 16:02:53
+LastEditTime: 2023-10-07 13:29:27
+"""
+
 import pandas as pd
 from pathlib import Path
 
@@ -5,9 +13,13 @@ from pathlib import Path
 STATION_NAME_PATH = Path(__file__).resolve().parent.parent / "data" / "station2name.csv"
 
 
-# @st.cache_resource
 def load_scode2name(file_path):
-    print("testset")
+    """Load station id to name mapping from csv.
+    Parameters
+    ----------
+    file_path : str
+        Path to the csv file
+    """
     return pd.read_csv(file_path, index_col=0)["station_name"].to_dict()
 
 

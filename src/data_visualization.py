@@ -1,3 +1,11 @@
+"""
+Description: Data visualization functions for web app
+Author: Chen Kun
+Email: chenkun_@outlook.com
+Date: 2023-10-06 15:58:44
+LastEditTime: 2023-10-07 13:30:01
+"""
+
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
