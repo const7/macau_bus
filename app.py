@@ -3,7 +3,7 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-10-06 18:30:59
+LastEditTime: 2023-10-07 14:17:11
 """
 
 import sqlite3
@@ -27,8 +27,8 @@ def build_sidebar(conn):
 
     # User input in the sidebar
     with st.sidebar:
-        st.header("设置")
-        selected_route = st.selectbox("Select a route", routes["route"])
+        st.header("澳门巴士")
+        selected_route = st.selectbox("选择巴士路线", routes["route"])
         # Load stations based on selected route
         station_data, _, _ = data_processing.get_station_data(conn, selected_route)
         station_options = [
@@ -40,15 +40,15 @@ def build_sidebar(conn):
             )
         ]
         _, selected_station_info = st.selectbox(
-            "Select a station", options=station_options, format_func=lambda x: x[0]
+            "选择站点", options=station_options, format_func=lambda x: x[0]
         )
     return selected_route, selected_station_info
 
 
-def build_recent_start(conn, route):
+def build_recent_start(conn, route, station_info):
     # recent start time
-    st.subheader("最近三趟发车时间")
-    recent_start_df = data_processing.get_start_data(conn, route)
+    st.subheader("最近三趟发车/到站时间")
+    recent_start_df = data_processing.get_start_data(conn, route, station_info)
     st.table(recent_start_df)
 
 
@@ -78,13 +78,13 @@ def build_bis_iframe(route):
 
 
 def main():
-    st.title("澳门巴士数据")
+    # st.title("澳门巴士数据")
     # connet to database
     with sqlite3.connect(config.DATABASE_PATH) as conn:
         # sidebar (user input)
-        selected_route, _ = build_sidebar(conn)
+        selected_route, selected_station_info = build_sidebar(conn)
         # recent start time
-        build_recent_start(conn, selected_route)
+        build_recent_start(conn, selected_route, selected_station_info)
         # bis iframe
         build_bis_iframe(selected_route)
 

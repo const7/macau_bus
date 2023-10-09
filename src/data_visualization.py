@@ -3,9 +3,10 @@ Description: Data visualization functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-06 15:58:44
-LastEditTime: 2023-10-07 13:30:01
+LastEditTime: 2023-10-07 13:57:39
 """
 
+import streamlit as st
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
@@ -26,6 +27,7 @@ from matplotlib import font_manager
 #     st.plotly_chart(fig)
 
 
+@st.cache_data
 def plot_travel_time(data, sid2name):
     """Plot the travel time bar between stations.
 

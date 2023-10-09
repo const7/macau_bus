@@ -3,7 +3,7 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-10-06 18:28:17
+LastEditTime: 2023-10-07 14:16:06
 """
 
 import pandas as pd
@@ -75,7 +75,7 @@ def get_station_data(_conn, route):
     return data, scode2name, sid2name
 
 
-def get_start_data(conn, route):
+def get_start_data(conn, route, station_info):
     """Get most recent 3 start time of the route.
 
     Parameters
@@ -84,13 +84,16 @@ def get_start_data(conn, route):
         Connection to the storage database
     route : str
         Route id like 701X, 71, 72, 73, 73S, N6
+    station_info : tuple
+        Station code and station index
 
     Returns
     -------
     data: pd.DataFrame
         Most recent 3 start time of the route
     """
-    query = f"SELECT * FROM bus_data WHERE route = '{route}' AND station_index = 0 ORDER BY arrival_time DESC LIMIT 3"
+    _, station_index = station_info
+    query = f"SELECT * FROM bus_data WHERE route = '{route}' AND station_index = {station_index} ORDER BY arrival_time DESC LIMIT 3"
     data = pd.read_sql(query, conn)
     data["station_name"] = data.apply(
         lambda x: f"{x['station_code']}-{get_station_name(x['station_code'], x['station_index'])}",
@@ -101,41 +104,41 @@ def get_start_data(conn, route):
             "route": "路线",
             "bus_plate": "车牌",
             "station_name": "站点",
-            "arrival_time": "发车时间",
+            "arrival_time": "发车/到站时间",
         },
         inplace=True,
         axis=1,
     )
-    return data[["路线", "车牌", "站点", "发车时间"]]
+    return data[["路线", "车牌", "站点", "发车/到站时间"]]
 
 
-# @st.cache_data
-# def load_arrival_data(conn, route, station_info):
-#     station_code, station_index = station_info
-#     query = f"""
-#     SELECT arrival_time
-#     FROM bus_data
-#     WHERE route = '{route}' AND station_code = '{station_code}' AND station_index = {station_index}
-#     """
-#     data = pd.read_sql(query, conn)
-#     data["minute"] = pd.to_datetime(data["arrival_time"]).dt.strftime("%H:%M")
+@st.cache_data
+def get_arrival_data(_conn, route, station_info):
+    station_code, station_index = station_info
+    query = f"""
+    SELECT arrival_time
+    FROM bus_data
+    WHERE route = '{route}' AND station_code = '{station_code}' AND station_index = {station_index}
+    """
+    data = pd.read_sql(query, _conn)
+    data["minute"] = pd.to_datetime(data["arrival_time"]).dt.strftime("%H:%M")
 
-#     # Create a DataFrame with every minute of the day
-#     all_minutes = pd.date_range(start="00:00", end="23:59", freq="T").strftime("%H:%M")
-#     all_minutes_df = pd.DataFrame(all_minutes, columns=["minute"])
+    # Create a DataFrame with every minute of the day
+    all_minutes = pd.date_range(start="00:00", end="23:59", freq="T").strftime("%H:%M")
+    all_minutes_df = pd.DataFrame(all_minutes, columns=["minute"])
 
-#     # Group your data by minute and count the arrivals
-#     grouped_data = data.groupby("minute").size().reset_index(name="count")
+    # Group your data by minute and count the arrivals
+    grouped_data = data.groupby("minute").size().reset_index(name="count")
 
-#     # Merge the grouped data with the all_minutes_df DataFrame to ensure data for every minute
-#     merged_data = pd.merge(
-#         all_minutes_df, grouped_data, on="minute", how="left"
-#     ).fillna(0)
+    # Merge the grouped data with the all_minutes_df DataFrame to ensure data for every minute
+    merged_data = pd.merge(
+        all_minutes_df, grouped_data, on="minute", how="left"
+    ).fillna(0)
 
-#     return merged_data
+    return merged_data
 
 
-@st.cache_resource
+@st.cache_data
 def get_travel_time(_conn, route):
     query = f"SELECT * FROM bus_data WHERE route = '{route}' ORDER BY bus_plate, arrival_time, station_index"
     data = pd.read_sql(query, _conn)
@@ -169,4 +172,15 @@ def get_travel_time(_conn, route):
         & (data_sorted["next_station_index"] == data_sorted["station_index"] + 1)
         & (data_sorted["next_station_index"].notna())
     ]
-    return filtered_data
+    # remove outliers
+    grouped_data = filtered_data.groupby(["station_index", "next_station_index"])
+    travel_time_stats = grouped_data["travel_time"].agg(["mean", "std"]).reset_index()
+    merged_data = pd.merge(
+        filtered_data, travel_time_stats, on=["station_index", "next_station_index"]
+    )
+    merged_data["z_score"] = (
+        merged_data["travel_time"] - merged_data["mean"]
+    ) / merged_data["std"]
+    final_data = merged_data[merged_data["z_score"].abs() <= 3]
+
+    return final_data
