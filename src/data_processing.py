@@ -3,7 +3,7 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-10-07 14:16:06
+LastEditTime: 2023-11-02 13:42:11
 """
 
 import pandas as pd
@@ -57,7 +57,7 @@ def get_station_data(_conn, route):
     _conn : sqlite3.Connection
         Connection to the storage database
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     """
     query = f"""
     SELECT DISTINCT station_code, station_index
@@ -83,7 +83,7 @@ def get_start_data(conn, route, station_info):
     conn : sqlite3.Connection
         Connection to the storage database
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     station_info : tuple
         Station code and station index
 
