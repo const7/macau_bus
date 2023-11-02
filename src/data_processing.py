@@ -3,9 +3,10 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-11-02 13:42:11
+LastEditTime: 2023-11-02 22:50:24
 """
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 from . import utils
@@ -15,7 +16,7 @@ from . import utils
 scode2name = utils.load_scode2name(utils.STATION_NAME_PATH)
 
 
-def get_station_name(station_code, station_index):
+def get_station_name(station_code, station_index, full=False):
     """Construct station name.
     Parameters
     ----------
@@ -23,6 +24,10 @@ def get_station_name(station_code, station_index):
         Station code like T530
     station_index : int
         Station index in the route
+    full : bool, optional
+        Whether to return full station name, by default False
+        short name example: T550/3-澳门大学
+        full name example: [0] T550/3-澳门大学（起点）
 
     Returns
     -------
@@ -33,7 +38,10 @@ def get_station_name(station_code, station_index):
     station_tmp_code = station_code if "/" in station_code else station_code + "/1"
     station_name = scode2name.get(station_tmp_code, "未知站点")
     if station_index == 0:
-        station_name += " (起点)"
+        station_name += "（起点）"
+    station_name = f"{station_code}-{station_name}"
+    if full:
+        station_name = f"[{station_index}] {station_name}"
     return station_name
 
 
@@ -45,7 +53,7 @@ def get_route_data(_conn):
     _conn : sqlite3.Connection
         Connection to the storage database
     """
-    query = "SELECT DISTINCT route FROM bus_data"
+    query = "SELECT DISTINCT route FROM bus_data ORDER BY route"
     return pd.read_sql(query, _conn)
 
 
@@ -67,7 +75,7 @@ def get_station_data(_conn, route):
     """
     data = pd.read_sql(query, _conn)
     data["station_name"] = data.apply(
-        lambda row: get_station_name(row["station_code"], row["station_index"]),
+        lambda x: get_station_name(x["station_code"], x["station_index"], full=True),
         axis=1,
     )
     scode2name = dict(zip(data["station_code"], data["station_name"]))
@@ -75,7 +83,29 @@ def get_station_data(_conn, route):
     return data, scode2name, sid2name
 
 
-def get_start_data(conn, route, station_info):
+@st.cache_data
+def get_station_options(data):
+    """Build station options for selectbox.
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Station data
+    Returns
+    -------
+    options : list
+        Station options for selectbox in format of [(name, (code, idx))]
+    """
+    return [
+        (name, (code, idx))
+        for name, code, idx in zip(
+            data["station_name"],
+            data["station_code"],
+            data["station_index"],
+        )
+    ]
+
+
+def get_recent_start(conn, route, station_info):
     """Get most recent 3 start time of the route.
 
     Parameters
@@ -96,7 +126,7 @@ def get_start_data(conn, route, station_info):
     query = f"SELECT * FROM bus_data WHERE route = '{route}' AND station_index = {station_index} ORDER BY arrival_time DESC LIMIT 3"
     data = pd.read_sql(query, conn)
     data["station_name"] = data.apply(
-        lambda x: f"{x['station_code']}-{get_station_name(x['station_code'], x['station_index'])}",
+        lambda x: get_station_name(x["station_code"], x["station_index"]),
         axis=1,
     )
     data.rename(
@@ -110,6 +140,118 @@ def get_start_data(conn, route, station_info):
         axis=1,
     )
     return data[["路线", "车牌", "站点", "发车/到站时间"]]
+
+
+def get_recent_bus(conn, route, station_info, travel_df):
+    station_code, station_index = station_info
+    max_wait_seconds = travel_df["travel_time"].max()
+    query = f"""
+    WITH MaxStationIndex AS (
+        SELECT MAX(station_index) AS max_index
+        FROM bus_data
+        WHERE route = '{route}'
+        AND arrival_time >= DATE('now', '-3 days')
+    ),
+
+    LatestDepartures AS (
+        SELECT bus_plate, MAX(arrival_time) AS latest_departure_time
+        FROM bus_data
+        WHERE route = '{route}'
+        AND station_index = 0
+        GROUP BY bus_plate
+    ),
+
+    LatestRecords AS (
+        SELECT t.bus_plate, MAX(t.arrival_time) AS latest_arrival_time
+        FROM bus_data t
+        JOIN LatestDepartures ld ON t.bus_plate = ld.bus_plate
+        WHERE route = '{route}'
+        AND t.arrival_time >= ld.latest_departure_time
+        GROUP BY t.bus_plate
+    )
+
+    SELECT t.*
+    FROM bus_data t
+    JOIN LatestRecords lr ON t.bus_plate = lr.bus_plate AND t.arrival_time = lr.latest_arrival_time
+    JOIN MaxStationIndex msi ON t.station_index < msi.max_index
+    WHERE route = '{route}'
+    AND t.station_index < {station_index}
+    AND (julianday('now') - julianday(t.arrival_time)) * 86400 <= {max_wait_seconds}
+    ORDER BY t.arrival_time DESC
+    LIMIT 5;
+    """
+    data = pd.read_sql(query, conn)
+    data["arrival_time"] = pd.to_datetime(data["arrival_time"])
+    if data.empty:
+        return pd.DataFrame(columns=["车牌", "当前站点", "预计等待时间", "最早到站时间", "最晚到站时间"])
+
+    # get wait time information
+    wait_station_name = get_station_name(station_code, station_index, full=True)
+
+    def get_wait_time(row):
+        curr_station_name = get_station_name(
+            row["station_code"], row["station_index"], full=True
+        )
+        tmp_travel_df = travel_df.query(
+            f"start_name == '{curr_station_name}' and end_name == '{wait_station_name}'"
+        )
+        if tmp_travel_df.empty:
+            return np.nan, np.nan, np.nan
+        mean_wait_time = tmp_travel_df["travel_time"].mean() / 60
+        average_arrival_time = row["arrival_time"] + pd.Timedelta(
+            seconds=tmp_travel_df["travel_time"].mean()
+        )
+        earliest_arrival_time = row["arrival_time"] + pd.Timedelta(
+            seconds=tmp_travel_df["travel_time"].min()
+        )
+        latest_arrival_time = row["arrival_time"] + pd.Timedelta(
+            seconds=tmp_travel_df["travel_time"].max()
+        )
+        return (
+            mean_wait_time,
+            average_arrival_time,
+            earliest_arrival_time,
+            latest_arrival_time,
+        )
+
+    data[
+        [
+            "wait_time",
+            "average_arrival_time",
+            "earliest_arrival_time",
+            "latest_arrival_time",
+        ]
+    ] = data.apply(get_wait_time, axis=1, result_type="expand")
+    # format wait datetime
+    data["wait_time"] = data["wait_time"].round(1).astype(str)
+    # "%m-%d %H:%M:%S"
+    data["average_arrival_time"] = pd.to_datetime(
+        data["average_arrival_time"]
+    ).dt.strftime("%H:%M:%S")
+    data["earliest_arrival_time"] = pd.to_datetime(
+        data["earliest_arrival_time"]
+    ).dt.strftime("%H:%M:%S")
+    data["latest_arrival_time"] = pd.to_datetime(
+        data["latest_arrival_time"]
+    ).dt.strftime("%H:%M:%S")
+
+    # format data
+    data["station_name"] = data.apply(
+        lambda x: get_station_name(x["station_code"], x["station_index"]), axis=1
+    )
+    data.rename(
+        {
+            "bus_plate": "车牌",
+            "station_name": "当前站点",
+            "wait_time": "平均等待（分钟）",
+            "average_arrival_time": "平均到站",
+            "earliest_arrival_time": "预计最早",
+            "latest_arrival_time": "预计最晚",
+        },
+        inplace=True,
+        axis=1,
+    )
+    return data[["车牌", "当前站点", "平均等待（分钟）", "平均到站", "预计最早", "预计最晚"]]
 
 
 @st.cache_data
@@ -143,44 +285,53 @@ def get_travel_time(_conn, route):
     query = f"SELECT * FROM bus_data WHERE route = '{route}' ORDER BY bus_plate, arrival_time, station_index"
     data = pd.read_sql(query, _conn)
     data["arrival_datetime"] = pd.to_datetime(data["arrival_time"])
-    data["station_name"] = data[["station_code", "station_index"]].apply(
-        lambda x: f"[{x['station_index']}] {x['station_code']}-{get_station_name(x['station_code'], x['station_index'])}",
+    data["station_name"] = data.apply(
+        lambda x: get_station_name(x["station_code"], x["station_index"], full=True),
         axis=1,
     )
-    # Sort the data by bus_plate, arrival_datetime, and station_index
-    data_sorted = data.sort_values(
-        by=["bus_plate", "arrival_datetime", "station_index"]
+    # detect new trip
+    data["new_trip"] = (
+        data["station_index"] <= data.groupby("bus_plate")["station_index"].shift(1)
+    ) | (data["bus_plate"] != data["bus_plate"].shift(1))
+
+    data["trip_id"] = data["new_trip"].cumsum()
+
+    # calculate travel time
+    def calculate_travel_times(group):
+        times = group["arrival_datetime"].values
+        stations = group["station_name"].values
+        # get upper triangle index
+        i, j = np.triu_indices(len(times), k=1)
+        # get time differences (in seconds)
+        travel_times = (times[j] - times[i]).astype("timedelta64[s]").astype(int)
+        return pd.DataFrame(
+            {
+                "start_name": stations[i],
+                "end_name": stations[j],
+                "travel_time": travel_times,
+            }
+        )
+
+    travel_times_df = (
+        data.groupby("trip_id").apply(calculate_travel_times).reset_index(drop=True)
     )
 
-    # Calculate the station index and travel time for the next station
-    data_sorted["next_station_index"] = data_sorted.groupby("bus_plate")[
-        "station_index"
-    ].shift(-1)
-    # convert seconds to minutes
-    data_sorted["travel_time"] = (
-        data_sorted.groupby("bus_plate")["arrival_datetime"]
-        .diff()
-        .shift(-1)
-        .dt.total_seconds()
-        / 60
-    )
+    # remove outliers for each station pair
+    def remove_outliers(group):
+        # remove travel time longer than 2 hours
+        group = group[group["travel_time"] <= 7200]
+        # remove 3 sigma outliers
+        mean_time = group["travel_time"].mean()
+        std_time = group["travel_time"].std()
+        group = group[
+            (group["travel_time"] >= mean_time - 3 * std_time)
+            & (group["travel_time"] <= mean_time + 3 * std_time)
+        ]
+        return group
 
-    # Exclude the last station and any rows where the next station is not the expected next station
-    max_station_index = data_sorted["station_index"].max()
-    filtered_data = data_sorted[
-        (data_sorted["station_index"] != max_station_index)
-        & (data_sorted["next_station_index"] == data_sorted["station_index"] + 1)
-        & (data_sorted["next_station_index"].notna())
-    ]
-    # remove outliers
-    grouped_data = filtered_data.groupby(["station_index", "next_station_index"])
-    travel_time_stats = grouped_data["travel_time"].agg(["mean", "std"]).reset_index()
-    merged_data = pd.merge(
-        filtered_data, travel_time_stats, on=["station_index", "next_station_index"]
+    travel_times_df = (
+        travel_times_df.groupby(["start_name", "end_name"])
+        .apply(remove_outliers)
+        .reset_index(drop=True)
     )
-    merged_data["z_score"] = (
-        merged_data["travel_time"] - merged_data["mean"]
-    ) / merged_data["std"]
-    final_data = merged_data[merged_data["z_score"].abs() <= 3]
-
-    return final_data
+    return travel_times_df

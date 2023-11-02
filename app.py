@@ -3,7 +3,7 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-11-02 13:39:44
+LastEditTime: 2023-11-02 22:23:43
 """
 
 import sqlite3
@@ -12,7 +12,7 @@ import sqlite3
 import streamlit as st
 import streamlit.components.v1 as components
 
-# laod config
+# load config
 import config
 from src import data_processing
 from src import data_visualization
@@ -20,44 +20,63 @@ from src import data_visualization
 config = config.Config()
 
 
-def build_sidebar(conn):
+def build_bus_selection(conn):
+    # st.header("澳门巴士")
     # Load unique routes from the database
     routes = data_processing.get_route_data(conn)
-
-    # User input in the sidebar
-    with st.sidebar:
-        st.header("澳门巴士")
-        selected_route = st.selectbox("选择巴士路线", routes["route"])
-        # Load stations based on selected route
-        station_data, _, _ = data_processing.get_station_data(conn, selected_route)
-        station_options = [
-            (f"[{idx}] {code}-{name}", (code, idx))
-            for name, code, idx in zip(
-                station_data["station_name"],
-                station_data["station_code"],
-                station_data["station_index"],
-            )
-        ]
-        _, selected_station_info = st.selectbox(
-            "选择站点", options=station_options, format_func=lambda x: x[0]
-        )
-    return selected_route, selected_station_info
+    selected_route = st.selectbox("选择巴士路线", routes["route"])
+    return selected_route
 
 
-def build_recent_start(conn, route, station_info):
+def build_wait_time(conn, route):
     # recent start time
-    st.subheader("最近三趟发车/到站时间")
-    recent_start_df = data_processing.get_start_data(conn, route, station_info)
-    st.table(recent_start_df)
+    st.subheader("预计候车时间")
+    # Load stations based on selected route
+    station_data, _, _ = data_processing.get_station_data(conn, route)
+    station_options = data_processing.get_station_options(station_data)
+    _, station_info = st.selectbox(
+        "选择候车站点", options=station_options[:-1], format_func=lambda x: x[0]
+    )
+    # if in the first station
+    if station_info[1] == 0:
+        recent_start_df = data_processing.get_recent_start(conn, route, station_info)
+        st.caption("你位于起点站，这是最近3次起点站发车时间")
+        st.table(recent_start_df)
+        return
+    # get travel data
+    travel_time_df = data_processing.get_travel_time(conn, route)
+    if travel_time_df.empty:
+        st.caption("前方暂无车辆")
+    # get recent bus
+    else:
+        data = data_processing.get_recent_bus(conn, route, station_info, travel_time_df)
+        st.caption(f"前方有 {len(data)} 辆车")
+        st.table(data)
 
 
 def build_travel_time(conn, route):
-    # average travel time
-    st.subheader("当前站到下一站的平均时间")
-    _, _, sid2name = data_processing.get_station_data(conn, route)
+    st.subheader("任意两站之间旅行时间")
+    # get data
     travel_time_df = data_processing.get_travel_time(conn, route)
-    fig = data_visualization.plot_travel_time(travel_time_df, sid2name)
-    st.pyplot(fig)
+    # build selectbox
+    station_data, _, _ = data_processing.get_station_data(conn, route)
+    station_options = data_processing.get_station_options(station_data)
+    station1_col, station2_col = st.columns([1, 1])
+    with station1_col:
+        start_name, code_and_index = st.selectbox(
+            "选择起点", options=station_options[:-1], format_func=lambda x: x[0]
+        )
+    with station2_col:
+        start_index = station_options.index((start_name, code_and_index))
+        end_name, _ = st.selectbox(
+            "选择终点",
+            options=station_options[start_index + 1 :],
+            format_func=lambda x: x[0],
+        )
+    t_df = travel_time_df.query(
+        f"start_name == '{start_name}' and end_name == '{end_name}'"
+    )
+    st.pyplot(data_visualization.plot_station_wise_travel(t_df))
 
 
 def build_bis_iframe(route):
@@ -81,22 +100,12 @@ def main():
     # connet to database
     with sqlite3.connect(config.DATABASE_PATH) as conn:
         # sidebar (user input)
-        selected_route, selected_station_info = build_sidebar(conn)
+        selected_route = build_bus_selection(conn)
         # recent start time
-        build_recent_start(conn, selected_route, selected_station_info)
+        build_wait_time(conn, selected_route)
         # bis iframe
         build_bis_iframe(selected_route)
-
-        # map_data = pd.DataFrame(
-        #     np.random.randn(1000, 2) / [50, 50] + [37.76, -122.4], columns=["lat", "lon"]
-        # )
-        # st.map(map_data)
-
-        # # Plot data for Arrival Time Distribution on the main page
-        # st.subheader("Arrival Time Distribution")
-        # plot_data(selected_route, selected_station_info)
-
-        # Plot data for Average Travel Time Between Stations on the main page
+        # travel time
         build_travel_time(conn, selected_route)
 
 
