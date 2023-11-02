@@ -11,8 +11,10 @@ from pathlib import Path
 # get paths
 BASE_DIR = Path(__file__).resolve().parent
 
+
 class Config:
     """Config class for the project"""
+
     # data dir
     DATA_DIR = BASE_DIR / "data"
     # DATA_DIR.mkdir(exist_ok=True)
@@ -27,13 +29,14 @@ class Config:
 
     # for data collection
     # Routes to track
-    ROUTES = ["701X", "71", "72", "73", "73S", "N6"]
+    ROUTES = ["701x", "71", "72", "73", "73S", "N6"]
     # bus post url
     BUS_REQUEST_URL = "https://bis.dsat.gov.mo:37812/macauweb/routestation/bus"
 
     # for database table
     # table creation
     TABLE_CREATE_EXEC = "CREATE TABLE IF NOT EXISTS bus_data (route TEXT, bus_plate TEXT, station_code TEXT, arrival_time TEXT, station_index INT)"
+
 
 if __name__ == "__main__":
     print(BASE_DIR)

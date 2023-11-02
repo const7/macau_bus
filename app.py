@@ -3,11 +3,10 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-10-07 14:17:11
+LastEditTime: 2023-11-02 13:39:44
 """
 
 import sqlite3
-import pandas as pd
 
 # web app
 import streamlit as st

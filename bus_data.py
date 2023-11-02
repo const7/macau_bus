@@ -3,7 +3,7 @@ Description: Collect bus data from Macau DSAT
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:07:46
-LastEditTime: 2023-10-06 15:45:43
+LastEditTime: 2023-11-02 13:39:30
 """
 
 import time
@@ -55,7 +55,7 @@ def get_token(route, payload=fix_payload):
     Parameters
     ----------
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     payload : dict
         Fixed payload for bus request
 
@@ -95,7 +95,7 @@ def record_bus_arrival(conn, route, bus_plate, station_code, station_index):
     Parameters
     ----------
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     bus_plate : str
         Bus plate number
     station_code : str
@@ -122,7 +122,7 @@ def get_api_response(route):
     Parameters
     ----------
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     Returns
     -------
     response : requests.Response
@@ -142,7 +142,7 @@ def process_response(conn, route, response_json):
     conn : sqlite3.Connection
         Connection to the storage database
     route : str
-        Route id like 701X, 71, 72, 73, 73S, N6
+        Route id like 701x, 71, 72, 73, 73S, N6
     response_json : dict
         Response from bus request
     """
@@ -201,7 +201,7 @@ def main():
     Parameters
     ----------
     routes : list
-        Route id list like ["701X", "71", "72", "73", "73S", "N6"]
+        Route id list like ["701x", "71", "72", "73", "73S", "N6"]
     """
     with sqlite3.connect(config.DATABASE_PATH) as conn:
         # setup table connection
