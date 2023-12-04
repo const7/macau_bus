@@ -3,7 +3,7 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-11-03 17:04:48
+LastEditTime: 2023-12-04 13:47:42
 """
 
 import sqlite3
@@ -82,15 +82,15 @@ def build_travel_time(conn, route):
 def build_bis_iframe(route):
     with st.expander("查看实时路线及位置"):
         iframe_height = 500
-        route_line_col, route_map_col = st.columns([3, 2])
+        route_line_col, route_map_col = st.columns([5, 6])
         with route_line_col:
             components.iframe(
-                f"https://bis.dsat.gov.mo:37812/macauweb/map.html?routeName={route}&routeCode={route.zfill(5)}",
+                f"https://bis.dsat.gov.mo:37812/macauweb/routeLine.html?routeName={route}",
                 height=iframe_height,
             )
         with route_map_col:
             components.iframe(
-                f"https://bis.dsat.gov.mo:37812/macauweb/routeLine.html?routeName={route}",
+                f"https://bis.dsat.gov.mo:37812/macauweb/map.html?routeName={route}&routeCode={route.zfill(5)}",
                 height=iframe_height,
             )
 
