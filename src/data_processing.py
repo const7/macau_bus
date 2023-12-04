@@ -3,7 +3,7 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-11-02 22:50:24
+LastEditTime: 2023-11-03 17:01:32
 """
 
 import numpy as np
@@ -143,6 +143,18 @@ def get_recent_start(conn, route, station_info):
 
 
 def get_recent_bus(conn, route, station_info, travel_df):
+    """Get bus that started recently and have not arrived at the wait station.
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Connection to the storage database
+    route : str
+        Route id
+    station_info : tuple
+        Station code and station index of the wait station
+    travel_df : pd.DataFrame
+        Travel time data
+    """
     station_code, station_index = station_info
     max_wait_seconds = travel_df["travel_time"].max()
     query = f"""
@@ -197,18 +209,20 @@ def get_recent_bus(conn, route, station_info, travel_df):
         )
         if tmp_travel_df.empty:
             return np.nan, np.nan, np.nan
-        mean_wait_time = tmp_travel_df["travel_time"].mean() / 60
+        mean_wait_seconds = tmp_travel_df["travel_time"].mean()
+        std_wait_seconds = tmp_travel_df["travel_time"].std()
         average_arrival_time = row["arrival_time"] + pd.Timedelta(
-            seconds=tmp_travel_df["travel_time"].mean()
+            seconds=mean_wait_seconds
         )
+        # use 2 sigma here based on the observation of the data distribution
         earliest_arrival_time = row["arrival_time"] + pd.Timedelta(
-            seconds=tmp_travel_df["travel_time"].min()
+            seconds=mean_wait_seconds - 2 * std_wait_seconds
         )
         latest_arrival_time = row["arrival_time"] + pd.Timedelta(
-            seconds=tmp_travel_df["travel_time"].max()
+            seconds=mean_wait_seconds + 2 * std_wait_seconds
         )
         return (
-            mean_wait_time,
+            mean_wait_seconds / 60,
             average_arrival_time,
             earliest_arrival_time,
             latest_arrival_time,

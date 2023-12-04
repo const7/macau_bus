@@ -3,7 +3,7 @@ Description: Data visualization functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-06 15:58:44
-LastEditTime: 2023-11-02 22:39:49
+LastEditTime: 2023-11-03 16:48:34
 """
 
 import streamlit as st
@@ -29,13 +29,14 @@ from matplotlib import font_manager
 
 @st.cache_data
 def plot_station_wise_travel(data):
+    data["travel_time"] = data["travel_time"] / 60
     mean_travel_time = data["travel_time"].mean()
     std_travel_time = data["travel_time"].std()
-    lb_travel_time = mean_travel_time - 3 * std_travel_time
-    ub_travel_time = mean_travel_time + 3 * std_travel_time
+    lb_travel_time = mean_travel_time - 2 * std_travel_time
+    ub_travel_time = mean_travel_time + 2 * std_travel_time
     # Plotting
     ax = sns.histplot(x="travel_time", data=data, color="gray", alpha=0.5)
-    ax.set_xlabel("Travel time (s)")
+    ax.set_xlabel("Travel time (min)")
     ax.set_ylabel("")
     ax.axvline(mean_travel_time, color="green", linestyle="--")
     ax.axvline(lb_travel_time, color="gray", linestyle="--")
@@ -44,15 +45,15 @@ def plot_station_wise_travel(data):
     ax.text(
         mean_travel_time * 1.1,
         ax.get_ylim()[1] * 0.9,
-        f"Mean:\n{mean_travel_time / 60:.1f} min",
+        f"Mean:\n{mean_travel_time:.1f} min",
         ha="center",
         va="center",
         color="green",
     )
     ax.text(
-        lb_travel_time * 1.13,
+        lb_travel_time * 1.1,
         ax.get_ylim()[1] * 0.8,
-        f"- 3 std:\n{lb_travel_time / 60:.1f} min",
+        f"- 2 std:\n{lb_travel_time:.1f} min",
         ha="center",
         va="center",
         color="red",
@@ -60,7 +61,7 @@ def plot_station_wise_travel(data):
     ax.text(
         ub_travel_time * 1.05,
         ax.get_ylim()[1] * 0.8,
-        f"+ 3 std:\n{ub_travel_time / 60:.1f} min",
+        f"+ 2 std:\n{ub_travel_time:.1f} min",
         ha="center",
         va="center",
         color="red",
