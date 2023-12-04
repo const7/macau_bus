@@ -65,7 +65,7 @@ def get_station_data(_conn, route):
     _conn : sqlite3.Connection
         Connection to the storage database
     route : str
-        Route id like 701x, 71, 72, 73, 73S, N6
+        Route id like 701X, 71, 72, 73, 73S, N6
     """
     query = f"""
     SELECT DISTINCT station_code, station_index
@@ -113,7 +113,7 @@ def get_recent_start(conn, route, station_info):
     conn : sqlite3.Connection
         Connection to the storage database
     route : str
-        Route id like 701x, 71, 72, 73, 73S, N6
+        Route id like 701X, 71, 72, 73, 73S, N6
     station_info : tuple
         Station code and station index
 

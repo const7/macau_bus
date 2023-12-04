@@ -3,7 +3,7 @@ Description: Config file for the project
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 21:52:12
-LastEditTime: 2023-10-06 10:32:00
+LastEditTime: 2023-12-04 13:24:23
 """
 
 from pathlib import Path
@@ -29,7 +29,7 @@ class Config:
 
     # for data collection
     # Routes to track
-    ROUTES = ["701x", "71", "72", "73", "73S", "N6"]
+    ROUTES = ["701X", "71", "72", "73", "73S", "N6"]
     # bus post url
     BUS_REQUEST_URL = "https://bis.dsat.gov.mo:37812/macauweb/routestation/bus"
 
