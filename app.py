@@ -3,7 +3,7 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-12-04 13:47:42
+LastEditTime: 2023-12-04 17:00:04
 """
 
 import sqlite3
@@ -42,6 +42,11 @@ def build_wait_time(conn, route):
         recent_start_df = data_processing.get_recent_start(conn, route, station_info)
         st.caption("你位于起点站，这是最近3次起点站发车时间")
         st.table(recent_start_df)
+        # show time table
+        st.caption("以下是该巴士路线的运营时刻表")
+        tabletime_html = data_processing.get_timetable_html(route)
+        if tabletime_html:
+            components.html(tabletime_html, height=250, scrolling=True)
         return
     # get travel data
     travel_time_df = data_processing.get_travel_time(conn, route)

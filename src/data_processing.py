@@ -3,9 +3,10 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-11-03 17:01:32
+LastEditTime: 2023-12-04 16:56:23
 """
 
+import requests
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -103,6 +104,67 @@ def get_station_options(data):
             data["station_index"],
         )
     ]
+
+
+@st.cache_data
+def get_timetable_html(route):
+    """Build bus timetable from tcm website.
+    Parameters
+    ----------
+    route : str
+        Bus route id like 701X, 71, 72, 73, 73S, N6
+    Returns
+    -------
+    str or None
+        html text
+    """
+    # get html
+    response = requests.get(
+        f"http://www.tcm.com.mo/web/station2/timeTable/{route}.html",
+        headers={
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1 Edg/119.0.0.0"
+        },
+    )
+    if response.status_code != 200:
+        return None
+    # html encoding
+    if response.encoding != "utf-8":
+        response.encoding = "utf-8"
+
+    # build html
+    css_style = """
+    <style>
+    table {
+        width: 100% !important; /* Set table width to 100% */
+        max-width: none !important; /* Remove max-width limitation */
+        border-collapse: collapse; /* Collapse borders for a cleaner look */
+        font-size: 12px; /* Decrease font size for a more compact display */
+        line-height: 0.9; /* Reduce line height for a more compact layout */
+    }
+    table, th, td {
+        border: 1px solid black; /* Add border styling (adjust as needed) */
+        padding: 0px; /* Reduce cell padding for a more compact layout */
+        text-align: center; /* Center-align text for better readability */
+        vertical-align: middle; /* Vertically align text in cells */
+    }
+    </style>
+    """
+    html_content = """
+    {css}
+    <div id="table-container"></div>
+    <script>
+    function renderTable(content) {{
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(content, 'text/html');
+        var table = doc.querySelectorAll('table')[1]; // select the second table
+        document.getElementById('table-container').innerHTML = table.outerHTML;
+    }}
+    renderTable(`{html}`);
+    </script>
+    """.format(
+        css=css_style, html=response.text
+    )
+    return html_content
 
 
 def get_recent_start(conn, route, station_info):
