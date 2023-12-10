@@ -3,7 +3,7 @@ Description: Streamlit app for bus arrival time visualization
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 14:55:52
-LastEditTime: 2023-12-04 17:00:04
+LastEditTime: 2023-12-11 02:42:09
 """
 
 import sqlite3
@@ -13,11 +13,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # load config
-import config
+from src.config import config
 from src import data_processing
 from src import data_visualization
-
-config = config.Config()
 
 
 def build_bus_selection(conn):
@@ -32,7 +30,7 @@ def build_wait_time(conn, route):
     # recent start time
     st.subheader("预计候车时间")
     # Load stations based on selected route
-    station_data, _, _ = data_processing.get_station_data(conn, route)
+    station_data, _, _ = data_processing.get_route_stations(conn, route)
     station_options = data_processing.get_station_options(station_data)
     _, station_info = st.selectbox(
         "选择候车站点", options=station_options[:-1], format_func=lambda x: x[0]
@@ -49,12 +47,11 @@ def build_wait_time(conn, route):
             components.html(tabletime_html, height=250, scrolling=True)
         return
     # get travel data
-    travel_time_df = data_processing.get_travel_time(conn, route)
-    if travel_time_df.empty:
+    data = data_processing.get_recent_bus(conn, route, station_info)
+    if data.empty:
         st.caption("前方暂无车辆")
     # get recent bus
     else:
-        data = data_processing.get_recent_bus(conn, route, station_info, travel_time_df)
         st.caption(f"前方有 {len(data)} 辆车")
         st.table(data)
 
@@ -64,7 +61,7 @@ def build_travel_time(conn, route):
     # get data
     travel_time_df = data_processing.get_travel_time(conn, route)
     # build selectbox
-    station_data, _, _ = data_processing.get_station_data(conn, route)
+    station_data, _, _ = data_processing.get_route_stations(conn, route)
     station_options = data_processing.get_station_options(station_data)
     station1_col, station2_col = st.columns([1, 1])
     with station1_col:

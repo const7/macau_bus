@@ -3,17 +3,65 @@ Description: Utils functions for the project
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-06 16:02:53
-LastEditTime: 2023-10-07 13:29:27
+LastEditTime: 2023-12-11 02:38:57
 """
 
+import hashlib
+import requests
 import pandas as pd
-from pathlib import Path
-
-# station id to name csv from preprocessed public data
-STATION_NAME_PATH = Path(__file__).resolve().parent.parent / "data" / "station2name.csv"
+from datetime import datetime
+from .config import config
 
 
-def load_scode2name(file_path):
+def get_api_response(route):
+    """Post request to get bus info.
+    Parameters
+    ----------
+    route : str
+        Route id like 701X, 71, 72, 73, 73S, N6
+    Returns
+    -------
+    response : requests.Response
+        Response from bus request
+    """
+
+    # build token in header
+    def get_token(route):
+        """Construct token for bus request."""
+
+        # get md5 hash
+        def get_bus_md5(payload):
+            # suffix like "action=dy&routeName=73&dir=0&lang=zh-tw&device=web"
+            bus_url_suffix = "&".join([f"{k}={v}" for k, v in payload.items()])
+            return hashlib.md5(bus_url_suffix.encode("utf-8")).hexdigest()
+
+        # add bus id to payload
+        payload = config.FIX_PAYLOAD.copy()
+        payload["routeName"] = route
+        bus_md5 = get_bus_md5(payload)
+        # get current time and format in "YYYYMMDDHHmm"
+        current_time = datetime.now().strftime("%Y%m%d%H%M")
+        # concatenate token and current time
+        return (
+            payload,
+            bus_md5[:4]
+            + current_time[:4]
+            + bus_md5[4:12]
+            + current_time[4:8]
+            + bus_md5[12:24]
+            + current_time[8:]
+            + bus_md5[24:],
+        )
+
+    headers = config.HEADERS.copy()
+    with requests.Session() as session:
+        payload, headers["token"] = get_token(route)
+        response = session.post(config.BUS_REQUEST_URL, headers=headers, data=payload)
+        response.raise_for_status()
+        return response
+
+
+def load_scode2name(file_path=config.STATION_NAME_PATH):
     """Load station id to name mapping from csv.
     Parameters
     ----------
