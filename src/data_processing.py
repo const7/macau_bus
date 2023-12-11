@@ -3,7 +3,7 @@ Description: Data processing functions for web app
 Author: Chen Kun
 Email: chenkun_@outlook.com
 Date: 2023-10-05 22:19:45
-LastEditTime: 2023-12-11 04:29:08
+LastEditTime: 2023-12-11 13:40:34
 """
 
 import requests
@@ -295,6 +295,7 @@ def get_recent_bus(conn, route, station_info):
         data["station_name"] = data.apply(
             lambda x: get_station_name(x["station_code"], x["station_index"]), axis=1
         )
+        # data.sort_values("wait_time", inplace=True)
         data.rename(
             {
                 "bus_plate": "车牌",
@@ -343,12 +344,12 @@ def get_travel_time(_conn, route):
     route_travel_time_path = config.TRAVEL_TIME_DIR / f"{route}.csv"
     if route_travel_time_path.exists():
         return pd.read_csv(route_travel_time_path)
-    one_month_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+    two_month_ago = datetime.datetime.now() - datetime.timedelta(days=60)
     query = f"""
     SELECT * 
     FROM bus_data 
     WHERE route = '{route}'
-        AND arrival_time >= '{one_month_ago.strftime('%Y-%m-%d %H:%M:%S')}'
+        AND arrival_time >= '{two_month_ago.strftime('%Y-%m-%d %H:%M:%S')}'
     ORDER BY bus_plate, arrival_time, station_index
     """
     data = pd.read_sql(query, _conn)
